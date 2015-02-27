@@ -29,6 +29,7 @@ import (
 	"github.com/google/cadvisor/api"
 	"github.com/google/cadvisor/container/docker"
 	"github.com/google/cadvisor/container/raw"
+	"github.com/google/cadvisor/exporter"
 	"github.com/google/cadvisor/healthz"
 	"github.com/google/cadvisor/info"
 	"github.com/google/cadvisor/manager"
@@ -36,6 +37,7 @@ import (
 	"github.com/google/cadvisor/pages/static"
 	"github.com/google/cadvisor/utils/sysfs"
 	"github.com/google/cadvisor/validate"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var argIp = flag.String("listen_ip", "", "IP to listen on, defaults to all IPs")
@@ -49,6 +51,8 @@ var httpAuthFile = flag.String("http_auth_file", "", "HTTP auth file for the web
 var httpAuthRealm = flag.String("http_auth_realm", "localhost", "HTTP auth realm for the web UI")
 var httpDigestFile = flag.String("http_digest_file", "", "HTTP digest file for the web UI")
 var httpDigestRealm = flag.String("http_digest_realm", "localhost", "HTTP digest file for the web UI")
+
+var prometheusEndpoint = flag.String("prometheus_endpoint", "/metrics", "Endpoint to expose prometheus metrics on")
 
 func main() {
 	defer glog.Flush()
@@ -90,6 +94,10 @@ func main() {
 	if err := healthz.RegisterHandler(); err != nil {
 		glog.Fatalf("Failed to register healthz handler: %s", err)
 	}
+
+	collector := exporter.NewPrometheusCollector(containerManager)
+	prometheus.MustRegister(collector)
+	http.Handle(*prometheusEndpoint, prometheus.Handler())
 
 	// Validation/Debug handler.
 	http.HandleFunc(validate.ValidatePage, func(w http.ResponseWriter, r *http.Request) {
